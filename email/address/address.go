@@ -2,6 +2,7 @@ package address
 
 import (
 	"io"
+
 	"strings"
 )
 
@@ -28,4 +29,8 @@ func ParseAddress(addr string) (Address, error) {
 // ReadAddress parses a single RFC 5321/5322 email address from r.
 func ReadAddress(r io.Reader) (Address, error) {
 	return newParser(r).parse()
+}
+
+func ReadAddressConcurrentLexer(r io.Reader) (Address, error) {
+	return newConcurrentParser(r)
 }

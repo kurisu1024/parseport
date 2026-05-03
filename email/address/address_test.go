@@ -2,6 +2,8 @@ package address_test
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/kurisu2024/parseport/email/address"
@@ -139,6 +141,49 @@ func TestParseAddress(t *testing.T) {
 			assert.Equal(t, tt.displayName, got.DisplayName)
 			assert.Equal(t, tt.localpart, got.Localpart)
 			assert.Equal(t, tt.domain, got.Domain)
+		})
+	}
+}
+
+var benchAddrs = []string{
+	// Long dot-atom addr-spec near RFC local-part limit, deep subdomain
+	"firstname.middlename.lastname+newsletter.2024@subdomain.department.long-company-name.example.co.uk",
+
+	// Name-addr: quoted display name with special chars + quoted local-part with escapes
+	`"Dr. Jane Q. Smith, PhD (Emeritus)" <"quoted.\"escaped\".local+tag"@mail.university.research.academic.edu>`,
+
+	// Heavy CFWS: nested comment before address, comment after local-part, comment before domain
+	`(outer (nested) comment) John.Q.Public+work (post-name) <john.q.public+work.tag@(pre-domain)mail.research.very-long-host.example.com>`,
+
+	// Name-addr: long quoted display name, complex local-part, full IPv6 domain literal
+	`"Very Long Display Name That Has Many Spaces And Makes The Parser Work Harder" <complex.local.part+tag.2024@[IPv6:2001:0db8:85a3:0000:0000:8a2e:0370:7334]>`,
+}
+
+func TestBenchAddrsParseClean(t *testing.T) {
+	for _, addr := range benchAddrs {
+		_, err := address.ParseAddress(addr)
+		if err != nil {
+			t.Errorf("bench address failed to parse: %q\nerror: %v", addr, err)
+		}
+	}
+}
+
+func BenchmarkLexer(b *testing.B) {
+	for idx, addr := range benchAddrs {
+		b.ResetTimer()
+		b.Run(fmt.Sprintf("addr-%d", idx), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, _ = address.ReadAddress(strings.NewReader(addr))
+			}
+		})
+	}
+
+	for idx, addr := range benchAddrs {
+		b.ResetTimer()
+		b.Run(fmt.Sprintf("addr-%d-optimized", idx), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, _ = address.ReadAddressConcurrentLexer(strings.NewReader(addr))
+			}
 		})
 	}
 }

@@ -5,8 +5,13 @@ import (
 	"strings"
 )
 
+type tokenReader interface {
+	Next() (token, error)
+	Peek() (token, error)
+}
+
 type parser struct {
-	lex *lexer
+	lex tokenReader
 }
 
 func newParser(r io.Reader) *parser {
@@ -280,4 +285,8 @@ func buildDisplayName(toks []token) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+func newConcurrentParser(r io.Reader) (Address, error) {
+	return (&parser{lex: newChanLexer(r)}).parse()
 }
