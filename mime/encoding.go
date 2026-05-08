@@ -3,28 +3,35 @@ package mime
 import (
 	"fmt"
 	"io"
+	"strings"
 
-	"golang.org/x/text/encoding/charmap"
-	"golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/encoding/ianaindex"
 	"golang.org/x/text/transform"
 )
 
-const (
-	UTF8   = "utf-8"
-	UTF16  = "utf-16"
-	LATIN1 = "latin-1"
-)
+// aliases maps non-IANA charset names to their IANA-registered equivalents.
+var aliases = map[string]string{
+	"latin-1":  "iso-8859-1",
+	"latin-2":  "iso-8859-2",
+	"latin-3":  "iso-8859-3",
+	"latin-4":  "iso-8859-4",
+	"latin-5":  "iso-8859-9",
+	"latin-6":  "iso-8859-10",
+	"latin-9":  "iso-8859-15",
+	"latin-10": "iso-8859-16",
+}
 
 func NewCharsetDecoder(charset string, r io.Reader) (io.Reader, error) {
-	switch charset {
-	case UTF8:
+	name := strings.ToLower(strings.TrimSpace(charset))
+	if alias, ok := aliases[name]; ok {
+		name = alias
+	}
+	if name == "utf-8" || name == "us-ascii" || name == "ascii" {
 		return r, nil
-	case UTF16:
-		dec := unicode.UTF16(unicode.BigEndian, unicode.UseBOM).NewDecoder()
-		return transform.NewReader(r, dec), nil
-	case LATIN1:
-		return transform.NewReader(r, charmap.ISO8859_1.NewDecoder()), nil
-	default:
+	}
+	enc, err := ianaindex.MIME.Encoding(name)
+	if err != nil {
 		return nil, fmt.Errorf("unsupported charset: %q", charset)
 	}
+	return transform.NewReader(r, enc.NewDecoder()), nil
 }

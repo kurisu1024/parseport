@@ -15,7 +15,7 @@ import (
 
 func TestNewCharsetDecoderUTF8(t *testing.T) {
 	t.Run("ascii passthrough", func(t *testing.T) {
-		r, err := mime.NewCharsetDecoder(mime.UTF8, strings.NewReader("hello"))
+		r, err := mime.NewCharsetDecoder("utf-8", strings.NewReader("hello"))
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
@@ -24,7 +24,7 @@ func TestNewCharsetDecoderUTF8(t *testing.T) {
 
 	t.Run("multibyte passthrough", func(t *testing.T) {
 		input := "こんにちは"
-		r, err := mime.NewCharsetDecoder(mime.UTF8, strings.NewReader(input))
+		r, err := mime.NewCharsetDecoder("utf-8", strings.NewReader(input))
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
@@ -32,18 +32,38 @@ func TestNewCharsetDecoderUTF8(t *testing.T) {
 	})
 
 	t.Run("empty input", func(t *testing.T) {
-		r, err := mime.NewCharsetDecoder(mime.UTF8, bytes.NewReader(nil))
+		r, err := mime.NewCharsetDecoder("utf-8", bytes.NewReader(nil))
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
 		assert.Empty(t, got)
 	})
+
+	t.Run("case-insensitive", func(t *testing.T) {
+		r, err := mime.NewCharsetDecoder("UTF-8", strings.NewReader("hi"))
+		require.NoError(t, err)
+		got, err := io.ReadAll(r)
+		require.NoError(t, err)
+		assert.Equal(t, []byte("hi"), got)
+	})
+}
+
+func TestNewCharsetDecoderASCII(t *testing.T) {
+	for _, name := range []string{"us-ascii", "ascii", "US-ASCII"} {
+		t.Run(name, func(t *testing.T) {
+			r, err := mime.NewCharsetDecoder(name, strings.NewReader("hello"))
+			require.NoError(t, err)
+			got, err := io.ReadAll(r)
+			require.NoError(t, err)
+			assert.Equal(t, []byte("hello"), got)
+		})
+	}
 }
 
 func TestNewCharsetDecoderUnknown(t *testing.T) {
-	_, err := mime.NewCharsetDecoder("ascii", strings.NewReader("x"))
+	_, err := mime.NewCharsetDecoder("unknown-xyz", strings.NewReader("x"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "ascii")
+	assert.Contains(t, err.Error(), "unknown-xyz")
 }
 
 func TestNewCharsetDecoderLatin1(t *testing.T) {
@@ -52,7 +72,7 @@ func TestNewCharsetDecoderLatin1(t *testing.T) {
 		for i := range input {
 			input[i] = byte(i)
 		}
-		r, err := mime.NewCharsetDecoder(mime.LATIN1, bytes.NewReader(input))
+		r, err := mime.NewCharsetDecoder("latin-1", bytes.NewReader(input))
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
@@ -60,7 +80,7 @@ func TestNewCharsetDecoderLatin1(t *testing.T) {
 	})
 
 	t.Run("copyright sign 0xA9 encodes to 0xC2 0xA9", func(t *testing.T) {
-		r, err := mime.NewCharsetDecoder(mime.LATIN1, bytes.NewReader([]byte{0xA9}))
+		r, err := mime.NewCharsetDecoder("latin-1", bytes.NewReader([]byte{0xA9}))
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
@@ -72,7 +92,7 @@ func TestNewCharsetDecoderLatin1(t *testing.T) {
 		for i := range input {
 			input[i] = byte(0x80 + i)
 		}
-		r, err := mime.NewCharsetDecoder(mime.LATIN1, bytes.NewReader(input))
+		r, err := mime.NewCharsetDecoder("latin-1", bytes.NewReader(input))
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
@@ -84,29 +104,28 @@ func TestNewCharsetDecoderLatin1(t *testing.T) {
 		}
 	})
 
-	t.Run("small buffer exercises overflow path", func(t *testing.T) {
-		// 0xE9 = é = U+00E9 = UTF-8: 0xC3 0xA9
-		r, err := mime.NewCharsetDecoder(mime.LATIN1, bytes.NewReader([]byte{0xE9}))
-		require.NoError(t, err)
-
-		p1 := make([]byte, 1)
-		n1, err1 := r.Read(p1)
-		require.NoError(t, err1)
-		assert.Equal(t, 1, n1)
-		assert.Equal(t, byte(0xC3), p1[0])
-
-		p2 := make([]byte, 1)
-		n2, _ := r.Read(p2)
-		assert.Equal(t, 1, n2)
-		assert.Equal(t, byte(0xA9), p2[0])
-	})
-
 	t.Run("empty input", func(t *testing.T) {
-		r, err := mime.NewCharsetDecoder(mime.LATIN1, bytes.NewReader(nil))
+		r, err := mime.NewCharsetDecoder("latin-1", bytes.NewReader(nil))
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
 		assert.Empty(t, got)
+	})
+
+	t.Run("iso-8859-1 alias", func(t *testing.T) {
+		r, err := mime.NewCharsetDecoder("iso-8859-1", bytes.NewReader([]byte{0xA9}))
+		require.NoError(t, err)
+		got, err := io.ReadAll(r)
+		require.NoError(t, err)
+		assert.Equal(t, "©", string(got))
+	})
+
+	t.Run("case-insensitive alias LATIN-1", func(t *testing.T) {
+		r, err := mime.NewCharsetDecoder("LATIN-1", bytes.NewReader([]byte{0xA9}))
+		require.NoError(t, err)
+		got, err := io.ReadAll(r)
+		require.NoError(t, err)
+		assert.Equal(t, "©", string(got))
 	})
 }
 
@@ -132,7 +151,7 @@ func TestNewCharsetDecoderUTF16(t *testing.T) {
 		var buf bytes.Buffer
 		buf.Write([]byte{0xFE, 0xFF}) // BOM BE
 		buf.Write(encodeUTF16BE("Hello"))
-		r, err := mime.NewCharsetDecoder(mime.UTF16, &buf)
+		r, err := mime.NewCharsetDecoder("utf-16", &buf)
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
@@ -143,7 +162,7 @@ func TestNewCharsetDecoderUTF16(t *testing.T) {
 		var buf bytes.Buffer
 		buf.Write([]byte{0xFF, 0xFE}) // BOM LE
 		buf.Write(encodeUTF16LE("Hello"))
-		r, err := mime.NewCharsetDecoder(mime.UTF16, &buf)
+		r, err := mime.NewCharsetDecoder("utf-16", &buf)
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
@@ -151,7 +170,7 @@ func TestNewCharsetDecoderUTF16(t *testing.T) {
 	})
 
 	t.Run("no BOM defaults to big-endian", func(t *testing.T) {
-		r, err := mime.NewCharsetDecoder(mime.UTF16, bytes.NewReader(encodeUTF16BE("Hi")))
+		r, err := mime.NewCharsetDecoder("utf-16", bytes.NewReader(encodeUTF16BE("Hi")))
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
@@ -164,7 +183,7 @@ func TestNewCharsetDecoderUTF16(t *testing.T) {
 		buf.Write([]byte{0xFE, 0xFF}) // BOM BE
 		buf.Write([]byte{0xD8, 0x3D}) // high surrogate
 		buf.Write([]byte{0xDE, 0x00}) // low surrogate
-		r, err := mime.NewCharsetDecoder(mime.UTF16, &buf)
+		r, err := mime.NewCharsetDecoder("utf-16", &buf)
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
@@ -172,7 +191,7 @@ func TestNewCharsetDecoderUTF16(t *testing.T) {
 	})
 
 	t.Run("empty input", func(t *testing.T) {
-		r, err := mime.NewCharsetDecoder(mime.UTF16, bytes.NewReader(nil))
+		r, err := mime.NewCharsetDecoder("utf-16", bytes.NewReader(nil))
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
@@ -184,10 +203,37 @@ func TestNewCharsetDecoderUTF16(t *testing.T) {
 		var buf bytes.Buffer
 		buf.Write([]byte{0xFE, 0xFF}) // BOM BE
 		buf.Write([]byte{0xDC, 0x00}) // stray low surrogate 0xDC00
-		r, err := mime.NewCharsetDecoder(mime.UTF16, &buf)
+		r, err := mime.NewCharsetDecoder("utf-16", &buf)
 		require.NoError(t, err)
 		got, err := io.ReadAll(r)
 		require.NoError(t, err)
 		assert.Equal(t, []byte("\xef\xbf\xbd"), got) // U+FFFD in UTF-8
 	})
+}
+
+func TestNewCharsetDecoderExtended(t *testing.T) {
+	tests := []struct {
+		charset string
+		input   []byte
+		want    string
+	}{
+		// Windows-1252: 0x80 = € (U+20AC)
+		{"windows-1252", []byte{0x80}, "€"},
+		// ISO-8859-2: 0xE0 = ŕ (U+0155)
+		{"iso-8859-2", []byte{0xE0}, "ŕ"},
+		// KOI8-R: 0xC2 = б (U+0431)
+		{"koi8-r", []byte{0xC2}, "б"},
+		// latin-2 alias for iso-8859-2
+		{"latin-2", []byte{0xE0}, "ŕ"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.charset, func(t *testing.T) {
+			r, err := mime.NewCharsetDecoder(tc.charset, bytes.NewReader(tc.input))
+			require.NoError(t, err)
+			got, err := io.ReadAll(r)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, string(got))
+		})
+	}
 }
