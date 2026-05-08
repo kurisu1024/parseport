@@ -1,8 +1,10 @@
 package mime
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
+	"mime/quotedprintable"
 	"strings"
 
 	"golang.org/x/text/encoding/ianaindex"
@@ -34,4 +36,16 @@ func NewCharsetDecoder(charset string, r io.Reader) (io.Reader, error) {
 		return nil, fmt.Errorf("unsupported charset: %q", charset)
 	}
 	return transform.NewReader(r, enc.NewDecoder()), nil
+}
+
+func NewTransferDecoder(encoding string, r io.Reader) io.Reader {
+	encoding = strings.ToLower(strings.TrimSpace(encoding))
+	switch encoding {
+	case "quoted-printable":
+		return quotedprintable.NewReader(r)
+	case "base64":
+		return base64.NewDecoder(base64.StdEncoding, r)
+	}
+	return r
+
 }
