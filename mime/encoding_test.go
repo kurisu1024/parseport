@@ -179,14 +179,15 @@ func TestNewCharsetDecoderUTF16(t *testing.T) {
 		assert.Empty(t, got)
 	})
 
-	t.Run("invalid stray low surrogate returns error", func(t *testing.T) {
-		// Low surrogate without preceding high surrogate
+	t.Run("invalid stray low surrogate replaced with U+FFFD", func(t *testing.T) {
+		// x/text replaces invalid surrogates with the Unicode replacement character
 		var buf bytes.Buffer
 		buf.Write([]byte{0xFE, 0xFF}) // BOM BE
 		buf.Write([]byte{0xDC, 0x00}) // stray low surrogate 0xDC00
 		r, err := mime.NewCharsetDecoder(mime.UTF16, &buf)
 		require.NoError(t, err)
-		_, err = io.ReadAll(r)
-		require.Error(t, err)
+		got, err := io.ReadAll(r)
+		require.NoError(t, err)
+		assert.Equal(t, []byte("\xef\xbf\xbd"), got) // U+FFFD in UTF-8
 	})
 }
